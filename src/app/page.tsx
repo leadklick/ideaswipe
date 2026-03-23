@@ -1,64 +1,159 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { SwipeDeck } from '@/components/IdeaCard/SwipeDeck';
+import { createClient } from '@/lib/supabase';
+import { Idea } from '@/types';
+import type { User } from '@supabase/supabase-js';
 
 export default function Home() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [user, setUser] = useState<User | null>(null);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [likedIdeas, setLikedIdeas] = useState<{ title: string; category: string }[]>([]);
+  const [savedCount, setSavedCount] = useState(0);
+
+  // Auth check
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        router.push('/login');
+      } else {
+        setUser(data.user);
+      }
+    });
+  }, []);
+
+  // Gespeicherte Likes aus Supabase laden (für Personalisierung)
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('saved_ideas')
+      .select('idea')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) {
+          const liked = data.map((row: { idea: Idea }) => ({
+            title: row.idea.title,
+            category: row.idea.category,
+          }));
+          setLikedIdeas(liked);
+          setSavedCount(data.length);
+        }
+      });
+  }, [user]);
+
+  const loadIdeas = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ likedIdeas }),
+      });
+      const data = await res.json();
+      if (data.ideas) {
+        // IDs sicherstellen
+        const withIds = data.ideas.map((idea: Idea, i: number) => ({
+          ...idea,
+          id: idea.id || `idea-${Date.now()}-${i}`,
+        }));
+        setIdeas(withIds);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [likedIdeas]);
+
+  // Ideen laden sobald User bekannt
+  useEffect(() => {
+    if (user) loadIdeas();
+  }, [user]);
+
+  const handleSave = useCallback(async (idea: Idea) => {
+    if (!user) return;
+    await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idea, userId: user.id }),
+    });
+    setLikedIdeas(prev => [{ title: idea.title, category: idea.category }, ...prev]);
+    setSavedCount(c => c + 1);
+  }, [user]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  if (!user) return null;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-white to-gray-50 flex flex-col">
+      {/* Navbar */}
+      <header className="bg-white/80 backdrop-blur border-b px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">💡</span>
+          <span className="text-lg font-bold text-indigo-600">IdeaSwipe</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <a
+            href="/saved"
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-indigo-600 transition-colors"
+          >
+            <span>⭐</span>
+            <span className="font-medium">{savedCount}</span>
+            <span className="hidden sm:inline">gespeichert</span>
+          </a>
+          <button
+            onClick={handleLogout}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      </header>
+
+      {/* Main */}
+      <main className="flex-1 flex flex-col items-center px-4 py-8">
+        {likedIdeas.length > 0 && (
+          <p className="text-xs text-indigo-400 mb-6 text-center">
+            ✨ Personalisiert basierend auf {likedIdeas.length} gespeicherten Ideen
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        )}
+
+        <SwipeDeck
+          ideas={ideas}
+          onLoadMore={loadIdeas}
+          onSave={handleSave}
+          isLoading={isLoading}
+        />
+
+        {/* Button-Legende */}
+        {!isLoading && ideas.length > 0 && (
+          <div className="flex gap-5 mt-8">
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-13 h-13 rounded-full bg-white shadow-lg flex items-center justify-center text-xl border-2 border-red-100 px-4 py-3">✕</div>
+              <span className="text-[10px] text-gray-400">Kein Interesse</span>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-13 h-13 rounded-full bg-white shadow-lg flex items-center justify-center text-xl border-2 border-amber-100 px-4 py-3">★</div>
+              <span className="text-[10px] text-gray-400">Speichern</span>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-13 h-13 rounded-full bg-white shadow-lg flex items-center justify-center text-xl border-2 border-emerald-100 px-4 py-3">✓</div>
+              <span className="text-[10px] text-gray-400">Gefällt mir</span>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
