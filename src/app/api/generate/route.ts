@@ -12,7 +12,6 @@ const CATEGORIES = [
 ];
 
 async function generateBatch(
-  batchIndex: number,
   categories: string,
   likedContext: string,
   startId: number
@@ -21,22 +20,25 @@ async function generateBatch(
     ? `Nutzer mag: ${likedContext}. Ähnliche Richtung bevorzugen.\n`
     : '';
 
-  const ids = Array.from({ length: 10 }, (_, i) => `"idea-${startId + i}"`).join(', ');
-
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 4000,
+    max_tokens: 6000,
     messages: [{
       role: 'user',
       content: `${personalization}Generiere genau 10 Business-Ideen für den Schweizer Markt 2026.
-Fokus: Schweiz-spezifische Probleme, Schweizer KMUs, Schweizer Regulierung (FINMA, DSG), Preise in CHF.
-Kategorien für diesen Batch: ${categories}
-IDs verwenden: ${ids}
+Fokus: Schweizer KMUs, Regulierung (FINMA, DSG), Preise in CHF.
+Kategorien: ${categories}
 
-Wichtig für den Titel: Kein abstrakter Produktname. Der Titel soll sofort klar machen was die Idee löst. Format: "Was es tut — für wen". Beispiele: "FINMA-Compliance-Autopilot für KMUs", "KI-Buchhaltung für Schweizer Freelancer", "Mietkaution ohne Bankkonto für Expats".
+Titel-Regel: Kein Produktname. Direkt beschreiben was es löst und für wen. Beispiel: "FINMA-Compliance-Autopilot für KMUs".
 
-Nur JSON-Array, kein Text davor/danach:
-[{"id":"idea-${startId}","title":"...","tagline":"...","problem":"...","solution":"...","market":"...","score":85,"category":"SaaS","regions":["Schweiz"],"mvp_weeks":8,"competitors":["..."],"why_now":"..."}]`
+WICHTIG: Nur genau diese 10 Felder pro Idee, keine zusätzlichen:
+id, title, tagline, problem, solution, market, score, category, regions, mvp_weeks, competitors, why_now
+
+IDs: idea-${startId} bis idea-${startId + 9}
+Felder kurz halten (max 2 Sätze pro Textfeld).
+
+Nur JSON-Array zurückgeben, kein Text davor oder danach, kein Markdown:
+[{"id":"idea-${startId}","title":"...","tagline":"...","problem":"...","solution":"...","market":"...","score":82,"category":"SaaS","regions":["Schweiz"],"mvp_weeks":8,"competitors":["Konkurrent"],"why_now":"..."}]`
     }]
   });
 
@@ -44,7 +46,22 @@ Nur JSON-Array, kein Text davor/danach:
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) return [];
   try {
-    return JSON.parse(match[0]);
+    const ideas = JSON.parse(match[0]);
+    // Nur erlaubte Felder durchlassen
+    return ideas.map((idea: Record<string, unknown>, i: number) => ({
+      id: idea.id || `idea-${startId + i}`,
+      title: idea.title || '',
+      tagline: idea.tagline || '',
+      problem: idea.problem || '',
+      solution: idea.solution || '',
+      market: idea.market || '',
+      score: idea.score || 80,
+      category: idea.category || 'SaaS',
+      regions: idea.regions || ['Schweiz'],
+      mvp_weeks: idea.mvp_weeks || 8,
+      competitors: idea.competitors || [],
+      why_now: idea.why_now || '',
+    }));
   } catch {
     return [];
   }
@@ -56,11 +73,10 @@ export async function POST(req: NextRequest) {
     const likedIdeas: { title: string; category: string }[] = body.likedIdeas || [];
     const likedContext = likedIdeas.slice(0, 8).map(i => `${i.title} (${i.category})`).join(', ');
 
-    // 3 Batches parallel
     const [batch1, batch2, batch3] = await Promise.all([
-      generateBatch(0, CATEGORIES[0], likedContext, 1),
-      generateBatch(1, CATEGORIES[1], likedContext, 11),
-      generateBatch(2, CATEGORIES[2], likedContext, 21),
+      generateBatch(CATEGORIES[0], likedContext, 1),
+      generateBatch(CATEGORIES[1], likedContext, 11),
+      generateBatch(CATEGORIES[2], likedContext, 21),
     ]);
 
     const ideas = [...batch1, ...batch2, ...batch3];
