@@ -70,7 +70,7 @@ Nur JSON-Array, kein Text, kein Markdown:
 }
 
 export async function POST(req: NextRequest) {
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').replace(/[^\x20-\x7E]/g, '').trim();
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }), {
       status: 500,

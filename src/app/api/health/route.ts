@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export const runtime = 'edge';
 
 export async function GET() {
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').replace(/[^\x20-\x7E]/g, '').trim();
 
   // Test if we can make a fetch to Anthropic
   let fetchTest = 'not_tested';
