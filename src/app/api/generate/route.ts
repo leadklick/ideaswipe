@@ -26,6 +26,7 @@ async function generateBatch(categories: string, likedContext: string, startId: 
         role: 'user',
         content: `${personalization}Generiere genau 10 Business-Ideen für den Schweizer Markt 2026.
 Fokus: Schweizer KMUs, Regulierung (FINMA, DSG), Preise in CHF.
+Sprache: Schweizerdeutsch – kein ß, immer ss schreiben (z.B. "Strasse" statt "Straße", "Busse" statt "Bußgelder").
 Kategorien: ${categories}
 
 Titel-Regel: Kein Produktname. Direkt beschreiben was es löst und für wen.
