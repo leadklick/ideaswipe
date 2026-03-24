@@ -14,7 +14,7 @@ export default function Home() {
 
   // Gespeicherte Likes laden
   useEffect(() => {
-    fetch('/api/saved')
+    fetch('/api/save')
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {

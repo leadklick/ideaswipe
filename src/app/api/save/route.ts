@@ -32,7 +32,11 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (!existing) {
-    await supabase.from('saved_ideas').insert({ user_id: userId, idea });
+    const { error } = await supabase.from('saved_ideas').insert({ user_id: userId, idea });
+    if (error) {
+      console.error('Supabase insert error:', error);
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });
