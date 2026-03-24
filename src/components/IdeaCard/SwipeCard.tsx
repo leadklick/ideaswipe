@@ -116,9 +116,9 @@ export function SwipeCard({ idea, onSwipe, isTop, stackIndex }: SwipeCardProps) 
         {/* Footer */}
         {isTop && (
           <div className="border-t bg-gray-50 px-5 py-2.5 flex justify-between text-xs text-gray-400">
-            <span>✕ Kein Interesse</span>
-            <span>★ Speichern</span>
-            <span>✓ Gefällt mir</span>
+            <span>← Kein Interesse</span>
+            <span>↑ Auch speichern</span>
+            <span>Speichern →</span>
           </div>
         )}
       </div>

@@ -115,16 +115,12 @@ export default function Home() {
         {!isLoading && ideas.length > 0 && (
           <div className="flex gap-5 mt-8">
             <div className="flex flex-col items-center gap-1">
-              <div className="bg-white shadow-lg rounded-full px-4 py-3 text-xl border-2 border-red-100">✕</div>
+              <div className="bg-white shadow-lg rounded-full px-4 py-3 text-xl border-2 border-red-100">←</div>
               <span className="text-[10px] text-gray-400">Kein Interesse</span>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <div className="bg-white shadow-lg rounded-full px-4 py-3 text-xl border-2 border-amber-100">★</div>
+              <div className="bg-white shadow-lg rounded-full px-4 py-3 text-xl border-2 border-emerald-100">→</div>
               <span className="text-[10px] text-gray-400">Speichern</span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <div className="bg-white shadow-lg rounded-full px-4 py-3 text-xl border-2 border-emerald-100">✓</div>
-              <span className="text-[10px] text-gray-400">Gefällt mir</span>
             </div>
           </div>
         )}

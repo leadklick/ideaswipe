@@ -4,9 +4,9 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 const CATEGORIES = [
-  'SaaS, KI-Tool, RegTech',
-  'B2B, Marketplace, FinTech',
-  'HealthTech, EdTech, B2C',
+  'Mobile App, KI-Tool, Alltag',
+  'Handwerk, Kleinbetrieb, Freelancer',
+  'Gesundheit, Familie, Lokales Gewerbe',
 ];
 
 async function generateBatch(categories: string, likedContext: string, startId: number, apiKey: string): Promise<object[]> {
@@ -24,12 +24,18 @@ async function generateBatch(categories: string, likedContext: string, startId: 
       max_tokens: 6000,
       messages: [{
         role: 'user',
-        content: `${personalization}Generiere genau 10 Business-Ideen für den Schweizer Markt 2026.
-Fokus: Schweizer KMUs, Regulierung (FINMA, DSG), Preise in CHF.
-Sprache: Schweizerdeutsch – kein ß, immer ss schreiben (z.B. "Strasse" statt "Straße", "Busse" statt "Bußgelder").
+        content: `${personalization}Generiere genau 10 einfache, praktische Business-Ideen für den Schweizer Markt 2026.
+
+WICHTIG – Zielgruppe und Stil:
+- Einfache Ideen für Kleinstbetriebe (1–20 MA), Handwerker, Freelancer, Familien, Alltagsmenschen
+- KEINE komplexen Enterprise-Software, RegTech, FinTech oder Compliance-Tools
+- Ideen sollen sofort verständlich sein – wie "Sprach-Bot für Handwerker der Rapporte diktiert" oder "Migräne-Tagebuch App"
+- Einfach umzusetzen, tiefer Einstiegspreis (CHF 5–49/Monat), Mobile-First
+- Löst echte Alltagsprobleme auf simple Art
+Sprache: Schweizerdeutsch – kein ß, immer ss schreiben.
 Kategorien: ${categories}
 
-Titel-Regel: Kein Produktname. Direkt beschreiben was es löst und für wen.
+Titel-Regel: Kein Produktname. Direkt beschreiben was es löst und für wen. Einfach und klar.
 
 WICHTIG: Nur genau diese Felder, keine zusätzlichen:
 id, title, tagline, problem, solution, market, score, category, regions, mvp_weeks, competitors, why_now
@@ -38,7 +44,7 @@ IDs: idea-${startId} bis idea-${startId + 9}
 Felder kurz halten (max 2 Sätze).
 
 Nur JSON-Array, kein Text, kein Markdown:
-[{"id":"idea-${startId}","title":"...","tagline":"...","problem":"...","solution":"...","market":"...","score":82,"category":"SaaS","regions":["Schweiz"],"mvp_weeks":8,"competitors":["x"],"why_now":"..."}]`
+[{"id":"idea-${startId}","title":"...","tagline":"...","problem":"...","solution":"...","market":"...","score":82,"category":"Mobile App","regions":["Schweiz"],"mvp_weeks":8,"competitors":["x"],"why_now":"..."}]`
       }]
     }),
   });
