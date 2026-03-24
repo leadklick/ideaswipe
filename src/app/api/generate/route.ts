@@ -9,14 +9,14 @@ const CATEGORIES = [
   'HealthTech, EdTech, B2C',
 ];
 
-async function generateBatch(categories: string, likedContext: string, startId: number): Promise<object[]> {
+async function generateBatch(categories: string, likedContext: string, startId: number, apiKey: string): Promise<object[]> {
   const personalization = likedContext ? `Nutzer mag: ${likedContext}. Ähnliche Richtung bevorzugen.\n` : '';
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
@@ -70,6 +70,14 @@ Nur JSON-Array, kein Text, kein Markdown:
 }
 
 export async function POST(req: NextRequest) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const body = await req.json();
   const likedIdeas: { title: string; category: string }[] = body.likedIdeas || [];
   const likedContext = likedIdeas.slice(0, 8).map((i: { title: string; category: string }) => `${i.title} (${i.category})`).join(', ');
@@ -84,9 +92,9 @@ export async function POST(req: NextRequest) {
 
       try {
         const promises = [
-          generateBatch(CATEGORIES[0], likedContext, 1),
-          generateBatch(CATEGORIES[1], likedContext, 11),
-          generateBatch(CATEGORIES[2], likedContext, 21),
+          generateBatch(CATEGORIES[0], likedContext, 1, apiKey),
+          generateBatch(CATEGORIES[1], likedContext, 11, apiKey),
+          generateBatch(CATEGORIES[2], likedContext, 21, apiKey),
         ];
 
         await Promise.all(promises.map(async (p, i) => {
