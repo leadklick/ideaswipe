@@ -30,6 +30,7 @@ export default function Home() {
 
   const loadIdeas = useCallback(async () => {
     setIsLoading(true);
+    setIdeas([]);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -37,12 +38,31 @@ export default function Home() {
         body: JSON.stringify({ likedIdeas }),
       });
       if (res.status === 401) { router.push('/login'); return; }
-      const data = await res.json();
-      if (data.ideas?.length > 0) {
-        setIdeas(data.ideas.map((idea: Idea, i: number) => ({
-          ...idea,
-          id: idea.id || `idea-${Date.now()}-${i}`,
-        })));
+      if (!res.body) return;
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (data.ideas?.length > 0) {
+              // Erste Batch: Ladescreen ausblenden
+              setIsLoading(false);
+              setIdeas(prev => [...prev, ...data.ideas]);
+            }
+          } catch { /* ignore parse errors */ }
+        }
       }
     } catch (err) {
       console.error(err);

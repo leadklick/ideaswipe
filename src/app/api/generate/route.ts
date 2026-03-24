@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
 export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -11,14 +12,8 @@ const CATEGORIES = [
   'HealthTech, EdTech, B2C',
 ];
 
-async function generateBatch(
-  categories: string,
-  likedContext: string,
-  startId: number
-): Promise<object[]> {
-  const personalization = likedContext
-    ? `Nutzer mag: ${likedContext}. Ähnliche Richtung bevorzugen.\n`
-    : '';
+async function generateBatch(categories: string, likedContext: string, startId: number): Promise<object[]> {
+  const personalization = likedContext ? `Nutzer mag: ${likedContext}. Ähnliche Richtung bevorzugen.\n` : '';
 
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -29,16 +24,16 @@ async function generateBatch(
 Fokus: Schweizer KMUs, Regulierung (FINMA, DSG), Preise in CHF.
 Kategorien: ${categories}
 
-Titel-Regel: Kein Produktname. Direkt beschreiben was es löst und für wen. Beispiel: "FINMA-Compliance-Autopilot für KMUs".
+Titel-Regel: Kein Produktname. Direkt beschreiben was es löst und für wen.
 
-WICHTIG: Nur genau diese 10 Felder pro Idee, keine zusätzlichen:
+WICHTIG: Nur genau diese Felder, keine zusätzlichen:
 id, title, tagline, problem, solution, market, score, category, regions, mvp_weeks, competitors, why_now
 
 IDs: idea-${startId} bis idea-${startId + 9}
-Felder kurz halten (max 2 Sätze pro Textfeld).
+Felder kurz halten (max 2 Sätze).
 
-Nur JSON-Array zurückgeben, kein Text davor oder danach, kein Markdown:
-[{"id":"idea-${startId}","title":"...","tagline":"...","problem":"...","solution":"...","market":"...","score":82,"category":"SaaS","regions":["Schweiz"],"mvp_weeks":8,"competitors":["Konkurrent"],"why_now":"..."}]`
+Nur JSON-Array, kein Text, kein Markdown:
+[{"id":"idea-${startId}","title":"...","tagline":"...","problem":"...","solution":"...","market":"...","score":82,"category":"SaaS","regions":["Schweiz"],"mvp_weeks":8,"competitors":["x"],"why_now":"..."}]`
     }]
   });
 
@@ -47,7 +42,6 @@ Nur JSON-Array zurückgeben, kein Text davor oder danach, kein Markdown:
   if (!match) return [];
   try {
     const ideas = JSON.parse(match[0]);
-    // Nur erlaubte Felder durchlassen
     return ideas.map((idea: Record<string, unknown>, i: number) => ({
       id: idea.id || `idea-${startId + i}`,
       title: idea.title || '',
@@ -62,32 +56,51 @@ Nur JSON-Array zurückgeben, kein Text davor oder danach, kein Markdown:
       competitors: idea.competitors || [],
       why_now: idea.why_now || '',
     }));
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const likedIdeas: { title: string; category: string }[] = body.likedIdeas || [];
-    const likedContext = likedIdeas.slice(0, 8).map(i => `${i.title} (${i.category})`).join(', ');
+  const body = await req.json();
+  const likedIdeas: { title: string; category: string }[] = body.likedIdeas || [];
+  const likedContext = likedIdeas.slice(0, 8).map((i: { title: string; category: string }) => `${i.title} (${i.category})`).join(', ');
 
-    const [batch1, batch2, batch3] = await Promise.all([
-      generateBatch(CATEGORIES[0], likedContext, 1),
-      generateBatch(CATEGORIES[1], likedContext, 11),
-      generateBatch(CATEGORIES[2], likedContext, 21),
-    ]);
+  // Streaming Response — sendet jeden Batch sobald er fertig ist
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
 
-    const ideas = [...batch1, ...batch2, ...batch3];
+      const send = (data: object) => {
+        controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'));
+      };
 
-    if (ideas.length === 0) {
-      return NextResponse.json({ error: 'Keine Ideen generiert' }, { status: 500 });
+      try {
+        // 3 Batches parallel starten
+        const promises = [
+          generateBatch(CATEGORIES[0], likedContext, 1),
+          generateBatch(CATEGORIES[1], likedContext, 11),
+          generateBatch(CATEGORIES[2], likedContext, 21),
+        ];
+
+        // Jeden Batch sofort senden wenn fertig
+        await Promise.all(promises.map(async (p, i) => {
+          const ideas = await p;
+          if (ideas.length > 0) {
+            send({ batch: i + 1, ideas });
+          }
+        }));
+      } catch (err) {
+        send({ error: String(err) });
+      } finally {
+        controller.close();
+      }
     }
+  });
 
-    return NextResponse.json({ ideas });
-  } catch (err) {
-    console.error('[generate]', err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }
