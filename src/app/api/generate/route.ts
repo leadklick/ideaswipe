@@ -1,10 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const CATEGORIES = [
   'SaaS, KI-Tool, RegTech',
@@ -15,12 +12,19 @@ const CATEGORIES = [
 async function generateBatch(categories: string, likedContext: string, startId: number): Promise<object[]> {
   const personalization = likedContext ? `Nutzer mag: ${likedContext}. Ähnliche Richtung bevorzugen.\n` : '';
 
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 6000,
-    messages: [{
-      role: 'user',
-      content: `${personalization}Generiere genau 10 Business-Ideen für den Schweizer Markt 2026.
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 6000,
+      messages: [{
+        role: 'user',
+        content: `${personalization}Generiere genau 10 Business-Ideen für den Schweizer Markt 2026.
 Fokus: Schweizer KMUs, Regulierung (FINMA, DSG), Preise in CHF.
 Kategorien: ${categories}
 
@@ -34,10 +38,16 @@ Felder kurz halten (max 2 Sätze).
 
 Nur JSON-Array, kein Text, kein Markdown:
 [{"id":"idea-${startId}","title":"...","tagline":"...","problem":"...","solution":"...","market":"...","score":82,"category":"SaaS","regions":["Schweiz"],"mvp_weeks":8,"competitors":["x"],"why_now":"..."}]`
-    }]
+      }]
+    }),
   });
 
-  const text = msg.content[0].type === 'text' ? msg.content[0].text : '[]';
+  if (!res.ok) {
+    throw new Error(`Anthropic API error: ${res.status}`);
+  }
+
+  const data = await res.json() as { content: { type: string; text: string }[] };
+  const text = data.content[0]?.type === 'text' ? data.content[0].text : '[]';
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) return [];
   try {
@@ -64,7 +74,6 @@ export async function POST(req: NextRequest) {
   const likedIdeas: { title: string; category: string }[] = body.likedIdeas || [];
   const likedContext = likedIdeas.slice(0, 8).map((i: { title: string; category: string }) => `${i.title} (${i.category})`).join(', ');
 
-  // Streaming Response — sendet jeden Batch sobald er fertig ist
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -74,14 +83,12 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        // 3 Batches parallel starten
         const promises = [
           generateBatch(CATEGORIES[0], likedContext, 1),
           generateBatch(CATEGORIES[1], likedContext, 11),
           generateBatch(CATEGORIES[2], likedContext, 21),
         ];
 
-        // Jeden Batch sofort senden wenn fertig
         await Promise.all(promises.map(async (p, i) => {
           const ideas = await p;
           if (ideas.length > 0) {
