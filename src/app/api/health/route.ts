@@ -28,7 +28,7 @@ export async function GET() {
     supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING',
     anthropic: apiKey ? 'SET' : 'MISSING',
     anthropic_len: apiKey.length,
-    anthropic_start: apiKey.substring(0, 8),
+    anthropic_start: apiKey.substring(0, 12),
     fetch_test: fetchTest,
   });
 }
